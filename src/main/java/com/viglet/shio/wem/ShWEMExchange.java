@@ -29,24 +29,36 @@ import com.viglet.shio.exchange.ShExchange;
 import com.viglet.shio.exchange.ShFolderExchange;
 import com.viglet.shio.exchange.ShSiteExchange;
 import com.viglet.shio.wem.utils.ShUtils;
+import com.viglet.shio.wem.v085.importexport.CTId;
+import com.viglet.shio.wem.v085.importexport.Channel;
 import com.viglet.shio.wem.v085.importexport.ImportSite;
 import com.viglet.shio.wem.v085.importexport.PackageBody;
 import com.viglet.shio.wem.v085.importexport.Site;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
-public class ShWEMImportExport {
-	private static final Log logger = LogFactory.getLog(ShWEMImportExport.class);
-	
+/**
+ * Convert WEM Export to Shio Export
+ * 
+ * @author Alexandre Oliveira
+ */
+public class ShWEMExchange {
+	private static final Log logger = LogFactory.getLog(ShWEMExchange.class);
+
 	private static final String DEFAULT_OWNER = "admin";
+	private static Map<String, String> wemIds = new HashMap<>();
+
 	private static PackageBody packageBody;
-	
+
 	public static void main(String[] args) throws JAXBException {
 
 		File file = new File(args[0]);
@@ -57,29 +69,64 @@ public class ShWEMImportExport {
 		ShExchange shExchange = new ShExchange();
 
 		shExchange.setSites(createSites(packageBody.getImportSite()));
-		shExchange.setFolders(createFolders(packageBody.getImportSite()));
+		shExchange.setFolders(createFolders(packageBody));
 		createExportFile(shExchange);
 
 	}
-	private static List<ShFolderExchange> createFolders(List<ImportSite> sites) {
+
+	private static List<ShFolderExchange> createFolders(PackageBody packageBody) {
+
+		getAllChannelIds(packageBody);
+
 		List<ShFolderExchange> shFolderExchanges = new ArrayList<>();
-		
-		sites.forEach(siteImport -> {
-			Site site = siteImport.getSite();
+
+		packageBody.getImportSite().forEach(importSite -> {
+			Site site = importSite.getSite();
 			site.getChannel().forEach(channel -> {
-				ShFolderExchange shFolderExchange = new ShFolderExchange();
-				shFolderExchange.setDate(new Date());
-				shFolderExchange.setFurl(channel.getFurlName());
-				shFolderExchange.setId(channel.getVcmId());
-				shFolderExchange.setName(channel.getName());
-				shFolderExchange.setOwner(DEFAULT_OWNER);			
-				shFolderExchange.setPosition(channel.getOrderAsSibling().intValue());
-				
-				shFolderExchanges.add(shFolderExchange);
+				shFolderExchanges.add(convertChannelToShFolder(channel));
 			});
+		});
+
+		packageBody.getImportChannel().forEach(importChannel -> {
+			Channel channel = importChannel.getChannel();
+			shFolderExchanges.add(convertChannelToShFolder(channel));
+
 		});
 		return shFolderExchanges;
 	}
+
+	private static void getAllChannelIds(PackageBody packageBody) {
+		packageBody.getImportSite().forEach(importSite -> {
+			Site site = importSite.getSite();
+			site.getChannel().forEach(channel -> {
+				wemIds.put(channel.getMgmtId(), channel.getVcmId());
+			});
+		});
+
+		packageBody.getImportChannel().forEach(importChannel -> {
+			Channel channel = importChannel.getChannel();
+			wemIds.put(channel.getMgmtId(), channel.getVcmId());
+
+		});
+	}
+
+	private static ShFolderExchange convertChannelToShFolder(Channel channel) {
+		ShFolderExchange shFolderExchange = new ShFolderExchange();
+		shFolderExchange.setDate(new Date());
+		shFolderExchange.setFurl(channel.getFurlName());
+		shFolderExchange.setId(channel.getVcmId());
+		shFolderExchange.setName(channel.getName());
+		shFolderExchange.setOwner(DEFAULT_OWNER);
+		shFolderExchange.setPosition(channel.getOrderAsSibling().intValue());
+		if (channel.getParentChannelId() != null && channel.getParentChannelId().getContent() != null
+				&& channel.getParentChannelId().getContent().size() > 0) {
+			String channelId = channel.getParentChannelId().getContent().get(0).toString();
+			String vcmId = wemIds.get(channelId);
+			shFolderExchange.setParentFolder(vcmId);
+		}
+		return shFolderExchange;
+	}
+
 	private static void createExportFile(ShExchange shExchange) {
 		String folderName = UUID.randomUUID().toString();
 		File userDir = new File(System.getProperty("user.dir"));
@@ -101,12 +148,11 @@ public class ShWEMImportExport {
 			logger.error("exportObject, MapperObject", mapperException);
 		}
 		String strDate = new SimpleDateFormat("yyyy-MM-dd_HHmmss").format(new Date());
-		
+
 		String zipFileName = "WEM_" + strDate + ".zip";
-		
+
 		File zipFile = new File(tmpDir.getAbsolutePath().concat(File.separator + zipFileName));
 
-		
 		ShUtils.addFilesToZip(exportDir, zipFile);
 	}
 

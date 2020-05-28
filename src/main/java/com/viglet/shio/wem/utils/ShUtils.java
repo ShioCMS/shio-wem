@@ -42,6 +42,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
 /**
+ * Shio Utils
  * @author Alexandre Oliveira
  */
 public class ShUtils {
