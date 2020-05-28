@@ -1,2 +1,3 @@
 # wem-migration
-WEM Migration Utility to import WEM Objects to Shiohara
+
+Convert WEM Export file to Shio Export file
