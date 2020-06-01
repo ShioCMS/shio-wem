@@ -43,6 +43,7 @@ import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -59,6 +60,8 @@ public class ShWEMExchange {
 
 	private static final String DEFAULT_OWNER = "admin";
 	private static Map<String, String> wemIds = new HashMap<>();
+	private static Map<String, String> projects = new HashMap<>();
+	private static Map<String, String> parentProjects = new HashMap<>();
 	private static final String ROOT_PROJECT_ID = UUID.randomUUID().toString();
 	private static final String ROOT_PROJECT_NAME = "Projects";
 	private static final String EXPORT_DIR_NAME = UUID.randomUUID().toString();
@@ -73,13 +76,17 @@ public class ShWEMExchange {
 		ShExchange shExchange = new ShExchange();
 
 		shExchange.setSites(createSites(packageBody.getImportSite()));
-		shExchange.setFolders(createFolders(packageBody));
 		shExchange.setPosts(createPosts(packageBody, packageBodyFile.getParentFile()));
+		shExchange.setFolders(createFolders(packageBody));
 		createExportFile(shExchange);
-
 	}
 
 	private static List<ShPostExchange> createPosts(PackageBody packageBody, File staticFilesFolder) {
+		List<ShPostExchange> shPostExchanges = createStaticFiles(packageBody, staticFilesFolder);
+		return shPostExchanges;
+	}
+
+	private static List<ShPostExchange> createStaticFiles(PackageBody packageBody, File staticFilesFolder) {
 		List<ShPostExchange> shPostExchanges = new ArrayList<>();
 		packageBody.getImportStaticFile().forEach(importStaticFile -> {
 			StaticFile staticFile = importStaticFile.getStaticFile();
@@ -103,24 +110,35 @@ public class ShWEMExchange {
 			shPostExchange.setPostType("File");
 			shPostExchange.setFurl(staticFile.getFurlName());
 			shPostExchange.setFields(fields);
-			if (staticFile.getChannelAssociation() != null
-					&& staticFile.getChannelAssociation().getReferenceId() != null) {
-				staticFile.getChannelAssociation().getReferenceId().forEach(referenceId -> {
-					if (referenceId != null && referenceId.getContent() != null
-							&& referenceId.getContent().size() > 0) {
-						String channelId = referenceId.getContent().get(0).toString();
-						String vcmId = wemIds.get(channelId);
-						shPostExchange.setFolder(vcmId);
-					} else {
-						shPostExchange.setFolder(ROOT_PROJECT_ID);
-					}
-				});
-			} else {
-				shPostExchange.setFolder(ROOT_PROJECT_ID);
-			}
+			if (projects.containsKey(staticFile.getVcmLogicalPath()))
+				shPostExchange.setFolder(projects.get(staticFile.getVcmLogicalPath()));
+			else
+				createFolderWithoutID(staticFile, shPostExchange);
+
 			shPostExchanges.add(shPostExchange);
 		});
 		return shPostExchanges;
+	}
+
+	private static void createFolderWithoutID(StaticFile staticFile, ShPostExchange shPostExchange) {
+		String[] staticFileFolders = staticFile.getVcmLogicalPath().split("/");
+		// iterating over an array
+		for (int i = 1; i < staticFileFolders.length; i++) {			
+			String path = String.join("/", Arrays.copyOfRange(staticFileFolders, 0, i + 1));
+			if (!projects.containsKey(path)) {
+				String id = UUID.randomUUID().toString();
+				projects.put(path, id);
+				if (i > 0) {
+					String parentPath = String.join("/", Arrays.copyOfRange(staticFileFolders, 0, i));
+					if (projects.containsKey(parentPath)) {
+						parentProjects.put(id, projects.get(parentPath));
+					} else {
+						parentProjects.put(id, ROOT_PROJECT_ID);
+					}
+				}
+			}
+		}
+		shPostExchange.setFolder(projects.get(staticFile.getVcmLogicalPath()));
 	}
 
 	private static List<ShFolderExchange> createFolders(PackageBody packageBody) {
@@ -148,7 +166,23 @@ public class ShWEMExchange {
 			Project project = importProject.getProject();
 			shFolderExchanges.add(convertProjectToShFolder(project));
 		});
-
+		projects.entrySet().forEach(project -> {
+			String[] pathArray = project.getKey().split("/");
+			
+			String name = pathArray[pathArray.length - 1];
+			ShFolderExchange shFolderExchange = new ShFolderExchange();
+			shFolderExchange.setDate(new Date());
+			shFolderExchange.setFurl(ShURLFormatter.format(name));
+			shFolderExchange.setId(project.getValue());
+			shFolderExchange.setName(name);
+			shFolderExchange.setOwner(DEFAULT_OWNER);
+			if (parentProjects.containsKey(project.getValue()))
+				shFolderExchange.setParentFolder(parentProjects.get(project.getValue()));	
+			else
+				shFolderExchange.setParentFolder(ROOT_PROJECT_ID);
+		
+			shFolderExchanges.add(shFolderExchange);
+		});
 		return shFolderExchanges;
 	}
 
@@ -198,7 +232,6 @@ public class ShWEMExchange {
 		ShFolderExchange shFolderExchange = new ShFolderExchange();
 		shFolderExchange.setDate(new Date());
 		shFolderExchange.setFurl(ShURLFormatter.format(project.getName()));
-		System.out.println(project.getVcmId());
 		shFolderExchange.setId(project.getVcmId());
 		shFolderExchange.setName(project.getName());
 		shFolderExchange.setOwner(DEFAULT_OWNER);
@@ -245,7 +278,6 @@ public class ShWEMExchange {
 		List<ShSiteExchange> shSiteExchanges = new ArrayList<>();
 		sites.forEach(siteImport -> {
 			Site site = siteImport.getSite();
-			System.out.println(site.getName());
 
 			List<String> rootFoldersUUID = new ArrayList<String>();
 			site.getChannel().forEach(channel -> {
