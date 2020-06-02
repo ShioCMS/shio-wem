@@ -30,11 +30,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.viglet.shio.exchange.ShExchange;
 import com.viglet.shio.exchange.ShFolderExchange;
 import com.viglet.shio.exchange.ShPostExchange;
+import com.viglet.shio.exchange.ShPostTypeExchange;
+import com.viglet.shio.exchange.ShPostTypeFieldExchange;
 import com.viglet.shio.exchange.ShSiteExchange;
 import com.viglet.shio.wem.url.ShURLFormatter;
 import com.viglet.shio.wem.utils.ShUtils;
 import com.viglet.shio.wem.v085.importexport.Channel;
 import com.viglet.shio.wem.v085.importexport.ContentInstance;
+import com.viglet.shio.wem.v085.importexport.ContentType;
 import com.viglet.shio.wem.v085.importexport.ImportSite;
 import com.viglet.shio.wem.v085.importexport.PackageBody;
 import com.viglet.shio.wem.v085.importexport.Project;
@@ -56,6 +59,8 @@ import java.util.UUID;
  * Convert WEM Export file to Shio Export file
  * 
  * @author Alexandre Oliveira
+ * @since 0.3.7
+ *
  */
 public class ShWEMExchange {
 	private static final Log logger = LogFactory.getLog(ShWEMExchange.class);
@@ -77,13 +82,53 @@ public class ShWEMExchange {
 		packageBody = (PackageBody) unmarshaller.unmarshal(packageBodyFile);
 
 		getAllChannelIds(packageBody);
-		
-		ShExchange shExchange = new ShExchange();		
+
+		ShExchange shExchange = new ShExchange();
+		shExchange.setPostTypes(createPostTypes(packageBody));
 		shExchange.setSites(createSites(packageBody.getImportSite()));
-		shExchange.setPosts(createPosts(packageBody, packageBodyFile.getParentFile()));
+		//shExchange.setPosts(createPosts(packageBody, packageBodyFile.getParentFile()));
 		shExchange.setFolders(createFolders(packageBody));
-		
+
 		createExportFile(shExchange);
+	}
+
+	private static List<ShPostTypeExchange> createPostTypes(PackageBody packageBody) {
+		List<ShPostTypeExchange> shPostTypeExchanges = new ArrayList<>();
+		packageBody.getImportContentType().forEach(importContentType -> {				
+			ContentType contentType = importContentType.getContentType();			
+			Map<String, ShPostTypeFieldExchange>  fields = new HashMap<>();
+			contentType.getRelation().forEach(relation -> {
+				relation.getAttributeDefinition().forEach(attributeDefinition -> {
+					
+					ShPostTypeFieldExchange shPostTypeFieldExchange = new ShPostTypeFieldExchange();
+					shPostTypeFieldExchange.setDescription(attributeDefinition.getDisplayName());
+					shPostTypeFieldExchange.setFields(fields);
+					shPostTypeFieldExchange.setId(attributeDefinition.getMgmtId());
+					shPostTypeFieldExchange.setLabel(attributeDefinition.getDisplayName());
+					shPostTypeFieldExchange.setOrdinal(attributeDefinition.getOrdering().intValue());
+					shPostTypeFieldExchange.setRequired(attributeDefinition.isRequired());
+					shPostTypeFieldExchange.setSummary(false);
+					shPostTypeFieldExchange.setTitle(attributeDefinition.isDefaultLabel());
+					shPostTypeFieldExchange.setWidget("TEXT");
+					fields.put(attributeDefinition.getName(), shPostTypeFieldExchange);
+				});
+				
+			});
+			ShPostTypeExchange shPostTypeExchange = new ShPostTypeExchange();
+			shPostTypeExchange.setId(contentType.getVcmId());
+			shPostTypeExchange.setDate(new Date());
+			shPostTypeExchange.setDescription(contentType.getDescription());
+			shPostTypeExchange.setFields(fields);
+			shPostTypeExchange.setLabel(contentType.getDisplayName());
+			shPostTypeExchange.setName(contentType.getName());
+			shPostTypeExchange.setNamePlural(contentType.getName().concat("s"));
+			shPostTypeExchange.setOwner(DEFAULT_OWNER);
+			shPostTypeExchange.setSystem(false);
+			
+			
+			shPostTypeExchanges.add(shPostTypeExchange);
+		});
+		return shPostTypeExchanges;
 	}
 
 	private static List<ShPostExchange> createPosts(PackageBody packageBody, File staticFilesFolder) {
@@ -115,17 +160,15 @@ public class ShWEMExchange {
 							&& referenceId.getContent().size() > 0) {
 						String channelId = referenceId.getContent().get(0).toString();
 						String vcmId = wemIds.get(channelId);
-						if (StringUtils.isEmpty(vcmId)) {
+						if (StringUtils.isEmpty(vcmId))
 							setFolderUsingProject(contentInstance.getVcmLogicalPath(), shPostExchange);
-						}
-						else {
-						shPostExchange.setFolder(vcmId);
-						}
+						else
+							shPostExchange.setFolder(vcmId);
 					}
 				});
-			} else {
+			} else
 				setFolderUsingProject(contentInstance.getVcmLogicalPath(), shPostExchange);
-			}
+
 			shPostExchanges.add(shPostExchange);
 		});
 
@@ -137,9 +180,8 @@ public class ShWEMExchange {
 			if (!projects.containsKey(logicalPath))
 				createFolderWithoutID(logicalPath, shPostExchange);
 			shPostExchange.setFolder(projects.get(logicalPath));
-		} else {
+		} else
 			shPostExchange.setFolder(ROOT_PROJECT_ID);
-		}
 	}
 
 	private static List<ShPostExchange> createStaticFiles(PackageBody packageBody, File staticFilesFolder) {
@@ -166,8 +208,8 @@ public class ShWEMExchange {
 			shPostExchange.setPostType("File");
 			shPostExchange.setFurl(StringUtils.substring(staticFile.getFurlName(), 0, 254));
 			shPostExchange.setFields(fields);
-			
-			setFolderUsingProject(staticFile.getVcmLogicalPath(), shPostExchange);		
+
+			setFolderUsingProject(staticFile.getVcmLogicalPath(), shPostExchange);
 
 			shPostExchanges.add(shPostExchange);
 		});
@@ -194,7 +236,7 @@ public class ShWEMExchange {
 	}
 
 	private static List<ShFolderExchange> createFolders(PackageBody packageBody) {
-		
+
 		List<ShFolderExchange> shFolderExchanges = new ArrayList<>();
 
 		packageBody.getImportSite().forEach(importSite -> {
@@ -292,14 +334,13 @@ public class ShWEMExchange {
 	private static File getExportDir() {
 		File userDir = new File(System.getProperty("user.dir"));
 		File tmpDir = new File(userDir.getAbsolutePath().concat(File.separator + "store" + File.separator + "tmp"));
-		if (!tmpDir.exists()) {
+		if (!tmpDir.exists())
 			tmpDir.mkdirs();
-		}
 
 		File exportDir = new File(tmpDir.getAbsolutePath().concat(File.separator + EXPORT_DIR_NAME));
-		if (!exportDir.exists()) {
+		if (!exportDir.exists())
 			exportDir.mkdirs();
-		}
+
 		return exportDir;
 	}
 
@@ -307,7 +348,6 @@ public class ShWEMExchange {
 
 		File exportDir = getExportDir();
 
-		// Object to JSON in file
 		ObjectMapper mapper = new ObjectMapper();
 		try {
 			mapper.writerWithDefaultPrettyPrinter().writeValue(
