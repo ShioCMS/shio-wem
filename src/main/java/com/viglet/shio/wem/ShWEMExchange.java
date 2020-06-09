@@ -35,6 +35,7 @@ import com.viglet.shio.exchange.ShPostTypeFieldExchange;
 import com.viglet.shio.exchange.ShSiteExchange;
 import com.viglet.shio.wem.url.ShURLFormatter;
 import com.viglet.shio.wem.utils.ShUtils;
+import com.viglet.shio.wem.v085.importexport.CTId;
 import com.viglet.shio.wem.v085.importexport.Channel;
 import com.viglet.shio.wem.v085.importexport.ContentInstance;
 import com.viglet.shio.wem.v085.importexport.ContentType;
@@ -116,6 +117,8 @@ public class ShWEMExchange {
 		List<ShPostTypeExchange> shPostTypeExchanges = new ArrayList<>();
 		packageBody.getImportContentType().forEach(importContentType -> {
 			ContentType contentType = importContentType.getContentType();
+
+			wemIds.put(contentType.getMgmtId(), contentType.getName());
 			Map<String, ShPostTypeFieldExchange> fields = new HashMap<>();
 			contentType.getRelation().forEach(relation -> {
 				relation.getAttributeDefinition().forEach(attributeDefinition -> {
@@ -213,15 +216,30 @@ public class ShWEMExchange {
 		List<ShPostExchange> shPostExchanges = new ArrayList<>();
 		packageBody.getImportContentInstance().forEach(importContentInstance -> {
 			ContentInstance contentInstance = importContentInstance.getContentInstance();
-
 			Map<String, Object> fields = new HashMap<>();
-			fields.put("TEXT", contentInstance.getVcmName());
+			contentInstance.getAttribute().forEach(attribute -> {
+				fields.put(attribute.getName(),
+						attribute.getValueString() != null ? attribute.getValueString().getValue() : null);
+			});
+			contentInstance.getRelation().forEach(relation -> {
+				relation.getAttribute().forEach(attribute -> {
+					fields.put(attribute.getName(),
+							attribute.getValueString() != null ? attribute.getValueString().getValue() : null);
+				});
+
+			});
 
 			ShPostExchange shPostExchange = new ShPostExchange();
 			shPostExchange.setId(contentInstance.getVcmId());
 			shPostExchange.setDate(new Date());
 			shPostExchange.setOwner(DEFAULT_OWNER);
-			shPostExchange.setPostType(TEXT);
+			CTId contentTypeId = contentInstance.getContentTypeId();
+			if (contentTypeId != null && contentTypeId.getContent() != null && contentTypeId.getContent().size() > 0
+					&& wemIds.containsKey(contentTypeId.getContent().get(0).toString())) {
+				shPostExchange.setPostType(wemIds.get(contentTypeId.getContent().get(0).toString()));
+			} else {
+				shPostExchange.setPostType(TEXT);
+			}
 			shPostExchange.setFurl(StringUtils.substring(contentInstance.getFurlName(), 0, 254));
 			shPostExchange.setFields(fields);
 			if (contentInstance.getChannelAssociation() != null
