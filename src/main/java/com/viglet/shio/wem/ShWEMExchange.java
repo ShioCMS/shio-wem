@@ -75,6 +75,23 @@ public class ShWEMExchange {
 	private static final String SLASH = "/";
 	private static PackageBody packageBody;
 
+	public static final String HIDDEN = "Hidden";
+	public static final String TEXT = "Text";
+	public static final String ACE_JS = "Ace Editor - Javascript";
+	public static final String ACE_HTML = "Ace Editor - HTML";
+	public static final String HTML_EDITOR = "HTML Editor";
+	public static final String FILE = "File";
+	public static final String TEXT_AREA = "Text Area";
+	public static final String COMBO_BOX = "Combo Box";
+	public static final String CONTENT_SELECT = "Content Select";
+	public static final String RELATOR = "Relator";
+	public static final String RECAPTCHA = "reCAPTCHA";
+	public static final String FORM_CONFIGURATION = "Form Configuration";
+	public static final String DATE = "Date";
+	public static final String MULTI_SELECT = "Multi Select";
+	public static final String TAB = "Tab";
+	public static final String CHECK_BOX = "Check Box";
+
 	public static void main(String[] args) throws JAXBException {
 		File packageBodyFile = new File(args[0]);
 		JAXBContext jaxbContext = JAXBContext.newInstance(PackageBody.class);
@@ -86,33 +103,39 @@ public class ShWEMExchange {
 		ShExchange shExchange = new ShExchange();
 		shExchange.setPostTypes(createPostTypes(packageBody));
 		shExchange.setSites(createSites(packageBody.getImportSite()));
-		//shExchange.setPosts(createPosts(packageBody, packageBodyFile.getParentFile()));
+		shExchange.setPosts(createPosts(packageBody, packageBodyFile.getParentFile()));
 		shExchange.setFolders(createFolders(packageBody));
 
 		createExportFile(shExchange);
 	}
 
 	private static List<ShPostTypeExchange> createPostTypes(PackageBody packageBody) {
+
+		Map<String, String> ctd2pt = contentType2PostType();
+
 		List<ShPostTypeExchange> shPostTypeExchanges = new ArrayList<>();
-		packageBody.getImportContentType().forEach(importContentType -> {				
-			ContentType contentType = importContentType.getContentType();			
-			Map<String, ShPostTypeFieldExchange>  fields = new HashMap<>();
+		packageBody.getImportContentType().forEach(importContentType -> {
+			ContentType contentType = importContentType.getContentType();
+			Map<String, ShPostTypeFieldExchange> fields = new HashMap<>();
 			contentType.getRelation().forEach(relation -> {
 				relation.getAttributeDefinition().forEach(attributeDefinition -> {
-					
+
 					ShPostTypeFieldExchange shPostTypeFieldExchange = new ShPostTypeFieldExchange();
 					shPostTypeFieldExchange.setDescription(attributeDefinition.getDisplayName());
-					shPostTypeFieldExchange.setFields(fields);
 					shPostTypeFieldExchange.setId(attributeDefinition.getMgmtId());
 					shPostTypeFieldExchange.setLabel(attributeDefinition.getDisplayName());
 					shPostTypeFieldExchange.setOrdinal(attributeDefinition.getOrdering().intValue());
 					shPostTypeFieldExchange.setRequired(attributeDefinition.isRequired());
 					shPostTypeFieldExchange.setSummary(false);
 					shPostTypeFieldExchange.setTitle(attributeDefinition.isDefaultLabel());
-					shPostTypeFieldExchange.setWidget("TEXT");
+
+					if (ctd2pt.containsKey(attributeDefinition.getWidgetName()))
+						shPostTypeFieldExchange.setWidget(ctd2pt.get(attributeDefinition.getWidgetName()));
+					else
+						shPostTypeFieldExchange.setWidget(TEXT);
 					fields.put(attributeDefinition.getName(), shPostTypeFieldExchange);
 				});
-				
+
 			});
 			ShPostTypeExchange shPostTypeExchange = new ShPostTypeExchange();
 			shPostTypeExchange.setId(contentType.getVcmId());
@@ -124,11 +147,59 @@ public class ShWEMExchange {
 			shPostTypeExchange.setNamePlural(contentType.getName().concat("s"));
 			shPostTypeExchange.setOwner(DEFAULT_OWNER);
 			shPostTypeExchange.setSystem(false);
-			
-			
+
 			shPostTypeExchanges.add(shPostTypeExchange);
 		});
 		return shPostTypeExchanges;
+	}
+
+	private static Map<String, String> contentType2PostType() {
+		Map<String, String> ctd2pt = new HashMap<>();
+		ctd2pt.put("ComponentKeyWidget", TEXT);
+		ctd2pt.put("ComponentListWidget", TEXT);
+		ctd2pt.put("FeatureXMLWidget", TEXT);
+		ctd2pt.put("FormatSelectionWidget", TEXT);
+		ctd2pt.put("NamingSelectWidget", TEXT);
+		ctd2pt.put("PageFormatMapRelatorWidget", TEXT);
+		ctd2pt.put("QueryXMLWidget", TEXT);
+		ctd2pt.put("RiGeneralSelectWidget", TEXT);
+		ctd2pt.put("StalePagePolicyWidget", TEXT);
+		ctd2pt.put("TemplateSiteURIWidget", TEXT);
+		ctd2pt.put("TemplateURIWidget", TEXT);
+		ctd2pt.put("TimeBasedInvPolicyWidget", TEXT);
+		ctd2pt.put("URLSchemeMapperWidget", TEXT);
+		ctd2pt.put("VCMCheckboxWidget", CHECK_BOX);
+		ctd2pt.put("VCMDateWidget", DATE);
+		ctd2pt.put("VCMEditLiveJavaWidget", HTML_EDITOR);
+		ctd2pt.put("VCMFileWidget", FILE);
+		ctd2pt.put("VCMGUIDWidget", TEXT);
+		ctd2pt.put("VCMHiddenWidget", HIDDEN);
+		ctd2pt.put("VCMRadiobuttonWidget", TEXT);
+		ctd2pt.put("VCMStaticSelectWidget", TEXT);
+		ctd2pt.put("VCMTextAreaWidget", TEXT_AREA);
+		ctd2pt.put("VCMTextWidget", TEXT);
+		ctd2pt.put("WCMChainSelectWidget", TEXT);
+		ctd2pt.put("WCMChannelSelectWidget", TEXT);
+		ctd2pt.put("WCMCheckboxWidget", CHECK_BOX);
+		ctd2pt.put("WCMContentMultiSelectWidget", MULTI_SELECT);
+		ctd2pt.put("WCMContentRelatorMultiCOEWidget", TEXT);
+		ctd2pt.put("WCMContentRelatorWidget", TEXT);
+		ctd2pt.put("WCMContentSelectWidget", CONTENT_SELECT);
+		ctd2pt.put("WCMDataMultiSelectWidget", MULTI_SELECT);
+		ctd2pt.put("WCMDataSelectSessionWidget", TEXT);
+		ctd2pt.put("WCMDataSelectWidget", TEXT);
+		ctd2pt.put("WCMDateTimeSelectorWidget", TEXT);
+		ctd2pt.put("WCMHiddenWidget", HIDDEN);
+		ctd2pt.put("WCMLinkWidget", TEXT);
+		ctd2pt.put("WCMMediaWidget", TEXT);
+		ctd2pt.put("WCMRadiobuttonWidget", TEXT);
+		ctd2pt.put("WCMRelatorWidget", TEXT);
+		ctd2pt.put("WCMStaticSelectWidget", TEXT);
+		ctd2pt.put("WCMTextAreaWidget", TEXT_AREA);
+		ctd2pt.put("WCMTextWidget", TEXT);
+		ctd2pt.put("WCMTinyMCEWidget", HTML_EDITOR);
+		ctd2pt.put("WCMUnstructuredContentWidget", TEXT);
+		return ctd2pt;
 	}
 
 	private static List<ShPostExchange> createPosts(PackageBody packageBody, File staticFilesFolder) {
@@ -150,7 +221,7 @@ public class ShWEMExchange {
 			shPostExchange.setId(contentInstance.getVcmId());
 			shPostExchange.setDate(new Date());
 			shPostExchange.setOwner(DEFAULT_OWNER);
-			shPostExchange.setPostType("Text");
+			shPostExchange.setPostType(TEXT);
 			shPostExchange.setFurl(StringUtils.substring(contentInstance.getFurlName(), 0, 254));
 			shPostExchange.setFields(fields);
 			if (contentInstance.getChannelAssociation() != null
