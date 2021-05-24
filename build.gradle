@@ -69,4 +69,7 @@ dependencies {
     compile group: 'org.apache.commons', name: 'commons-compress', version: '1.18'
     compile group: 'commons-io', name: 'commons-io', version:'2.6'
     compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.8.1'
+    
+    implementation group: 'javax.xml.bind', name: 'jaxb-api', version: '2.4.0-b180830.0359'
+    
 }

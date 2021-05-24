@@ -44,9 +44,11 @@ import com.viglet.shio.wem.v085.importexport.PackageBody;
 import com.viglet.shio.wem.v085.importexport.Project;
 import com.viglet.shio.wem.v085.importexport.Site;
 import com.viglet.shio.wem.v085.importexport.StaticFile;
+import com.viglet.shio.wem.v085.widgets.statiselect.StaticSelectWidget;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -137,6 +139,26 @@ public class ShWEMExchange {
 					else
 						shPostTypeFieldExchange.setWidget(TEXT);
 					fields.put(attributeDefinition.getName(), shPostTypeFieldExchange);
+
+					if (shPostTypeFieldExchange.getWidget().equals(COMBO_BOX)) {
+						String widgetDataXml = String.format("<staticSelectWidget>%s</staticSelectWidget>",
+								attributeDefinition.getWidgetData());
+						JAXBContext jaxbContext;
+						try {
+							jaxbContext = JAXBContext.newInstance(StaticSelectWidget.class);
+							StringBuffer choices = new StringBuffer();
+							Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+							StringReader reader = new StringReader(widgetDataXml);
+							StaticSelectWidget staticSelect = (StaticSelectWidget) unmarshaller.unmarshal(reader);
+							staticSelect.getSelectOptions().getSelectOption().forEach(option -> {
+								choices.append(String.format("%s: %s\\n", option.getValue(), option.getLabel()));
+							});
+							shPostTypeFieldExchange.setWidgetSettings(String.format("{\"choices\":\"%s\"}", choices));
+						} catch (JAXBException e) {
+							e.printStackTrace();
+						}
+
+					}
 				});
 
 			});
@@ -178,7 +200,7 @@ public class ShWEMExchange {
 		ctd2pt.put("VCMGUIDWidget", TEXT);
 		ctd2pt.put("VCMHiddenWidget", HIDDEN);
 		ctd2pt.put("VCMRadiobuttonWidget", TEXT);
-		ctd2pt.put("VCMStaticSelectWidget", TEXT);
+		ctd2pt.put("VCMStaticSelectWidget", COMBO_BOX);
 		ctd2pt.put("VCMTextAreaWidget", TEXT_AREA);
 		ctd2pt.put("VCMTextWidget", TEXT);
 		ctd2pt.put("WCMChainSelectWidget", TEXT);
@@ -202,6 +224,7 @@ public class ShWEMExchange {
 		ctd2pt.put("WCMTextWidget", TEXT);
 		ctd2pt.put("WCMTinyMCEWidget", HTML_EDITOR);
 		ctd2pt.put("WCMUnstructuredContentWidget", TEXT);
+
 		return ctd2pt;
 	}
 
