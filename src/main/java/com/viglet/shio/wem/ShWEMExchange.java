@@ -60,11 +60,15 @@ import java.io.StringReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Convert WEM Export file to Shio Export file
@@ -132,7 +136,7 @@ public class ShWEMExchange {
 
 			wemIds.put(contentType.getMgmtId(), contentType.getName());
 			Map<String, ShPostTypeFieldExchange> fields = new HashMap<>();
-			
+
 			contentType.getRelation().forEach(relation -> {
 				Map<String, ShPostTypeFieldExchange> relationFields = new HashMap<>();
 				ShPostTypeFieldExchange mainRelationField = new ShPostTypeFieldExchange();
@@ -150,6 +154,8 @@ public class ShWEMExchange {
 						mainRelationField.setSummary(false);
 						mainRelationField.setTitle(attributeDefinition.isDefaultLabel());
 						mainRelationField.setWidget(RELATOR);
+						mainRelationField
+								.setWidgetSettings(String.format("{\"relator\":{\"title\":\"%s\"}}", "Edit Row"));
 
 						fields.put(attributeDefinition.getName(), mainRelationField);
 						Map<String, String> relatorField = new HashMap<>();
@@ -176,15 +182,15 @@ public class ShWEMExchange {
 							JAXBContext jaxbContext;
 							try {
 								jaxbContext = JAXBContext.newInstance(StaticSelectWidget.class);
-								StringBuffer choices = new StringBuffer();
+								StringJoiner choices = new StringJoiner("\\n");
 								Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
 								StringReader reader = new StringReader(widgetDataXml);
 								StaticSelectWidget staticSelect = (StaticSelectWidget) unmarshaller.unmarshal(reader);
 								staticSelect.getSelectOptions().getSelectOption().forEach(option -> {
-									choices.append(String.format("%s: %s\\n", option.getValue(), option.getLabel()));
+									choices.add(String.format("%s: %s", option.getValue(), option.getLabel()));
 								});
 								shPostTypeFieldExchange
-										.setWidgetSettings(String.format("{\"choices\":\"%s\"}", choices));
+										.setWidgetSettings(String.format("{\"choices\":\"%s\"}", choices.toString()));
 							} catch (JAXBException e) {
 								e.printStackTrace();
 							}
@@ -194,6 +200,17 @@ public class ShWEMExchange {
 					}
 				});
 				if (hasMainRelation.value) {
+					LinkedHashMap<String, Integer> sortedRelationFields = relationFields.entrySet().stream()
+							.collect(Collectors.toMap(k -> (String) k.getKey(), e -> e.getValue().getOrdinal()))
+							.entrySet().stream().sorted(Map.Entry.comparingByValue())
+							.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
+									(oldValue, newValue) -> oldValue, LinkedHashMap::new));
+
+					sortedRelationFields.entrySet().stream().findFirst().ifPresent(sortedRelationField -> {
+						if (relationFields.containsKey(sortedRelationField.getKey())) {
+							relationFields.get(sortedRelationField.getKey()).setTitle(true);
+						}
+					});
 					mainRelationField.setFields(relationFields);
 				} else {
 					fields.putAll(relationFields);
