@@ -33,12 +33,20 @@ import com.viglet.shio.exchange.ShPostExchange;
 import com.viglet.shio.exchange.ShPostTypeExchange;
 import com.viglet.shio.exchange.ShPostTypeFieldExchange;
 import com.viglet.shio.exchange.ShSiteExchange;
+import com.viglet.shio.exchange.ShRelatorExchange;
+import com.viglet.shio.exchange.ShRelatorItemExchange;
+import com.viglet.shio.exchange.ShRelatorItemExchanges;
 import com.viglet.shio.wem.url.ShURLFormatter;
+import com.viglet.shio.wem.utils.HasMainRelation;
+import com.viglet.shio.wem.utils.LocalVariable;
 import com.viglet.shio.wem.utils.ShUtils;
+import com.viglet.shio.wem.v085.importexport.CTAttribute;
 import com.viglet.shio.wem.v085.importexport.CTId;
+import com.viglet.shio.wem.v085.importexport.CTRelationInstance;
 import com.viglet.shio.wem.v085.importexport.Channel;
 import com.viglet.shio.wem.v085.importexport.ContentInstance;
 import com.viglet.shio.wem.v085.importexport.ContentType;
+import com.viglet.shio.wem.v085.importexport.ImportContentInstance;
 import com.viglet.shio.wem.v085.importexport.ImportSite;
 import com.viglet.shio.wem.v085.importexport.PackageBody;
 import com.viglet.shio.wem.v085.importexport.Project;
@@ -95,6 +103,8 @@ public class ShWEMExchange {
 	public static final String TAB = "Tab";
 	public static final String CHECK_BOX = "Check Box";
 
+	public static Map<String, Map<String, String>> ctdRelators = new HashMap<>();
+
 	public static void main(String[] args) throws JAXBException {
 		File packageBodyFile = new File(args[0]);
 		JAXBContext jaxbContext = JAXBContext.newInstance(PackageBody.class);
@@ -122,44 +132,72 @@ public class ShWEMExchange {
 
 			wemIds.put(contentType.getMgmtId(), contentType.getName());
 			Map<String, ShPostTypeFieldExchange> fields = new HashMap<>();
+			
 			contentType.getRelation().forEach(relation -> {
+				Map<String, ShPostTypeFieldExchange> relationFields = new HashMap<>();
+				ShPostTypeFieldExchange mainRelationField = new ShPostTypeFieldExchange();
+				HasMainRelation hasMainRelation = new HasMainRelation();
+				hasMainRelation.value = false;
 				relation.getAttributeDefinition().forEach(attributeDefinition -> {
+					if (attributeDefinition.getWidgetName().equals("WCMContentRelatorWidget")) {
+						hasMainRelation.value = true;
 
-					ShPostTypeFieldExchange shPostTypeFieldExchange = new ShPostTypeFieldExchange();
-					shPostTypeFieldExchange.setDescription(attributeDefinition.getDisplayName());
-					shPostTypeFieldExchange.setId(attributeDefinition.getMgmtId());
-					shPostTypeFieldExchange.setLabel(attributeDefinition.getDisplayName());
-					shPostTypeFieldExchange.setOrdinal(attributeDefinition.getOrdering().intValue());
-					shPostTypeFieldExchange.setRequired(attributeDefinition.isRequired());
-					shPostTypeFieldExchange.setSummary(false);
-					shPostTypeFieldExchange.setTitle(attributeDefinition.isDefaultLabel());
+						mainRelationField.setDescription(attributeDefinition.getDisplayName());
+						mainRelationField.setId(attributeDefinition.getMgmtId());
+						mainRelationField.setLabel(attributeDefinition.getDisplayName());
+						mainRelationField.setOrdinal(attributeDefinition.getOrdering().intValue());
+						mainRelationField.setRequired(attributeDefinition.isRequired());
+						mainRelationField.setSummary(false);
+						mainRelationField.setTitle(attributeDefinition.isDefaultLabel());
+						mainRelationField.setWidget(RELATOR);
 
-					if (ctd2pt.containsKey(attributeDefinition.getWidgetName()))
-						shPostTypeFieldExchange.setWidget(ctd2pt.get(attributeDefinition.getWidgetName()));
-					else
-						shPostTypeFieldExchange.setWidget(TEXT);
-					fields.put(attributeDefinition.getName(), shPostTypeFieldExchange);
+						fields.put(attributeDefinition.getName(), mainRelationField);
+						Map<String, String> relatorField = new HashMap<>();
+						relatorField.put(relation.getName(), attributeDefinition.getName());
+						ctdRelators.put(contentType.getName(), relatorField);
+					} else {
+						ShPostTypeFieldExchange shPostTypeFieldExchange = new ShPostTypeFieldExchange();
+						shPostTypeFieldExchange.setDescription(attributeDefinition.getDisplayName());
+						shPostTypeFieldExchange.setId(attributeDefinition.getMgmtId());
+						shPostTypeFieldExchange.setLabel(attributeDefinition.getDisplayName());
+						shPostTypeFieldExchange.setOrdinal(attributeDefinition.getOrdering().intValue());
+						shPostTypeFieldExchange.setRequired(attributeDefinition.isRequired());
+						shPostTypeFieldExchange.setSummary(false);
+						shPostTypeFieldExchange.setTitle(attributeDefinition.isDefaultLabel());
 
-					if (shPostTypeFieldExchange.getWidget().equals(COMBO_BOX)) {
-						String widgetDataXml = String.format("<staticSelectWidget>%s</staticSelectWidget>",
-								attributeDefinition.getWidgetData());
-						JAXBContext jaxbContext;
-						try {
-							jaxbContext = JAXBContext.newInstance(StaticSelectWidget.class);
-							StringBuffer choices = new StringBuffer();
-							Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-							StringReader reader = new StringReader(widgetDataXml);
-							StaticSelectWidget staticSelect = (StaticSelectWidget) unmarshaller.unmarshal(reader);
-							staticSelect.getSelectOptions().getSelectOption().forEach(option -> {
-								choices.append(String.format("%s: %s\\n", option.getValue(), option.getLabel()));
-							});
-							shPostTypeFieldExchange.setWidgetSettings(String.format("{\"choices\":\"%s\"}", choices));
-						} catch (JAXBException e) {
-							e.printStackTrace();
+						if (ctd2pt.containsKey(attributeDefinition.getWidgetName()))
+							shPostTypeFieldExchange.setWidget(ctd2pt.get(attributeDefinition.getWidgetName()));
+						else
+							shPostTypeFieldExchange.setWidget(TEXT);
+
+						if (attributeDefinition.getWidgetName().equals("VCMStaticSelectWidget")) {
+							String widgetDataXml = String.format("<staticSelectWidget>%s</staticSelectWidget>",
+									attributeDefinition.getWidgetData());
+							JAXBContext jaxbContext;
+							try {
+								jaxbContext = JAXBContext.newInstance(StaticSelectWidget.class);
+								StringBuffer choices = new StringBuffer();
+								Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+								StringReader reader = new StringReader(widgetDataXml);
+								StaticSelectWidget staticSelect = (StaticSelectWidget) unmarshaller.unmarshal(reader);
+								staticSelect.getSelectOptions().getSelectOption().forEach(option -> {
+									choices.append(String.format("%s: %s\\n", option.getValue(), option.getLabel()));
+								});
+								shPostTypeFieldExchange
+										.setWidgetSettings(String.format("{\"choices\":\"%s\"}", choices));
+							} catch (JAXBException e) {
+								e.printStackTrace();
+							}
+
 						}
-
+						relationFields.put(attributeDefinition.getName(), shPostTypeFieldExchange);
 					}
 				});
+				if (hasMainRelation.value) {
+					mainRelationField.setFields(relationFields);
+				} else {
+					fields.putAll(relationFields);
+				}
 
 			});
 			ShPostTypeExchange shPostTypeExchange = new ShPostTypeExchange();
@@ -237,25 +275,14 @@ public class ShWEMExchange {
 
 	private static List<ShPostExchange> createOtherPosts(PackageBody packageBody) {
 		List<ShPostExchange> shPostExchanges = new ArrayList<>();
-		packageBody.getImportContentInstance().forEach(importContentInstance -> {
+		for (ImportContentInstance importContentInstance : packageBody.getImportContentInstance()) {
+
 			ContentInstance contentInstance = importContentInstance.getContentInstance();
 			Map<String, Object> fields = new HashMap<>();
 			contentInstance.getAttribute().forEach(attribute -> {
-				fields.put(attribute.getName(),
-						attribute.getValueString() != null ? attribute.getValueString().getValue() : null);
+				fields.put(attribute.getName(), getCIAttribValue(attribute));
 			});
-			contentInstance.getRelation().forEach(relation -> {
-				relation.getAttribute().forEach(attribute -> {
-					fields.put(attribute.getName(),
-							attribute.getValueString() != null ? attribute.getValueString().getValue() : null);
-				});
-
-			});
-
 			ShPostExchange shPostExchange = new ShPostExchange();
-			shPostExchange.setId(contentInstance.getVcmId());
-			shPostExchange.setDate(new Date());
-			shPostExchange.setOwner(DEFAULT_OWNER);
 			CTId contentTypeId = contentInstance.getContentTypeId();
 			if (contentTypeId != null && contentTypeId.getContent() != null && contentTypeId.getContent().size() > 0
 					&& wemIds.containsKey(contentTypeId.getContent().get(0).toString())) {
@@ -263,6 +290,70 @@ public class ShWEMExchange {
 			} else {
 				shPostExchange.setPostType(TEXT);
 			}
+
+			Map<String, List<Map<String, Object>>> relationsAndFields = new HashMap<>();
+			Map<String, String> relatorFieldAndRelations = new HashMap<>();
+			for (CTRelationInstance relation : contentInstance.getRelation()) {
+				Map<String, Object> relationFields = new HashMap<>();
+				LocalVariable relatorField = new LocalVariable();
+				relatorField.setStrValue(StringUtils.EMPTY);
+
+				if (ctdRelators.containsKey(shPostExchange.getPostType())) {
+					Map<String, String> relatorName = ctdRelators.get(shPostExchange.getPostType());
+					if (relatorName.containsKey(relation.getName())) {
+						relatorField.setStrValue(relatorName.get(relation.getName()));
+						relatorFieldAndRelations.put(relatorName.get(relation.getName()), relation.getName());
+					}
+
+				}
+				relation.getAttribute().forEach(attribute -> {
+					if (relatorField.getStrValue().equals(attribute.getName())) {
+						fields.put(attribute.getName(), getCIAttribValue(attribute));
+					} else {
+						relationFields.put(attribute.getName(), getCIAttribValue(attribute));
+					}
+
+				});
+				if (relationsAndFields.containsKey(relation.getName())) {
+
+					if (relationFields != null) {
+						relationsAndFields.get(relation.getName()).add(relationFields);
+					}
+				} else {
+					List<Map<String, Object>> fieldList = new ArrayList<>();
+					fieldList.add(relationFields);
+					relationsAndFields.put(relation.getName(), fieldList);
+				}
+			}
+
+			fields.entrySet().forEach(field -> {
+				if (relatorFieldAndRelations.containsKey(field.getKey())) {
+					String relatorName = relatorFieldAndRelations.get(field.getKey());
+
+					ShRelatorExchange shRelatorExchange = new ShRelatorExchange();
+					shRelatorExchange.setId(field.getValue().toString());
+					shRelatorExchange.setName(field.getKey());
+					ShRelatorItemExchanges relators = new ShRelatorItemExchanges();
+
+					if (relationsAndFields.containsKey(relatorName)) {
+						relationsAndFields.get(relatorName).forEach(subFields -> {
+							ShRelatorItemExchange shRelatorItemExchange = new ShRelatorItemExchange();
+							shRelatorItemExchange.setPosition(1);
+							shRelatorItemExchange.setFields(subFields);
+							relators.add(shRelatorItemExchange);
+						});
+
+					}
+					shRelatorExchange.setShSubPosts(relators);
+					field.setValue(shRelatorExchange);
+				}
+
+			});
+
+			shPostExchange.setId(contentInstance.getVcmId());
+			shPostExchange.setDate(new Date());
+			shPostExchange.setOwner(DEFAULT_OWNER);
+
 			shPostExchange.setFurl(StringUtils.substring(contentInstance.getFurlName(), 0, 254));
 			shPostExchange.setFields(fields);
 			if (contentInstance.getChannelAssociation() != null
@@ -282,9 +373,16 @@ public class ShWEMExchange {
 				setFolderUsingProject(contentInstance.getVcmLogicalPath(), shPostExchange);
 
 			shPostExchanges.add(shPostExchange);
-		});
+		}
 
 		return shPostExchanges;
+	}
+
+	private static Object getCIAttribValue(CTAttribute attribute) {
+		return attribute.getValueString() != null ? attribute.getValueString().getValue()
+				: (attribute.getValueInt() != null && attribute.getValueInt().getValue() != null)
+						? attribute.getValueInt().getValue()
+						: null;
 	}
 
 	private static void setFolderUsingProject(String logicalPath, ShPostExchange shPostExchange) {
